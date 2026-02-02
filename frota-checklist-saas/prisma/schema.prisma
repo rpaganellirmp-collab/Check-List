@@ -1,0 +1,245 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  DRIVER
+}
+
+enum HandoverStatus {
+  PENDING
+  COMPLETED
+}
+
+enum AccessoryAnswerValue {
+  OK
+  FALTANDO
+  DANIFICADO
+  NA
+}
+
+enum QuickCheckValue {
+  OK
+  IRREGULAR
+  NA
+}
+
+enum DamageType {
+  RISCO
+  AMASSADO
+  TRINCA
+  QUEBRA
+  FALTA_PECA
+  DESALINHAMENTO
+  OUTRO
+}
+
+enum DamageSeverity {
+  LEVE
+  MODERADA
+  GRAVE
+}
+
+enum DamageLocation {
+  PARA_CHOQUE_DIANTEIRO
+  PARA_CHOQUE_TRASEIRO
+  CAPO
+  TETO
+  PARA_LAMA_ESQ
+  PARA_LAMA_DIR
+  PORTA_DIANTEIRA_ESQ
+  PORTA_DIANTEIRA_DIR
+  PORTA_TRASEIRA_ESQ
+  PORTA_TRASEIRA_DIR
+  LATERAL_ESQ
+  LATERAL_DIR
+  VIDRO_DIANTEIRO
+  VIDRO_TRASEIRO
+  FAROL_ESQ
+  FAROL_DIR
+  LANTERNA_ESQ
+  LANTERNA_DIR
+  RODA_PNEU
+  INTERIOR
+  OUTRO
+}
+
+enum OverallStatus {
+  OK
+  ATENCAO
+  CRITICO
+}
+
+enum AttachmentOwnerType {
+  RECEIPT_BASE
+  ACCESSORY
+  DAMAGE
+}
+
+enum BasePhotoType {
+  ODOMETRO
+  FRENTE
+  TRASEIRA
+  LATERAL_ESQ
+  LATERAL_DIR
+  INTERIOR
+  AREA_CRITICA
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  users                 User[]
+  vehicles              Vehicle[]
+  handovers             Handover[]
+  receipts              Receipt[]
+  attachments           Attachment[]
+  accessoryTemplateItems AccessoryTemplateItem[]
+  quickCheckItems       QuickCheckItem[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  orgId        String
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(DRIVER)
+  createdAt    DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  handoversTo  Handover[]   @relation("HandoverTo")
+  handoversFrom Handover[]  @relation("HandoverFrom")
+  receipts     Receipt[]    @relation("ReceiptReceiver")
+}
+
+model Vehicle {
+  id        String   @id @default(cuid())
+  orgId     String
+  plate     String
+  brand     String
+  model     String
+  year      Int?
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  handovers    Handover[]
+}
+
+model Handover {
+  id          String         @id @default(cuid())
+  orgId       String
+  vehicleId   String
+  fromUserId  String?
+  toUserId    String
+  status      HandoverStatus @default(PENDING)
+  createdAt   DateTime       @default(now())
+  completedAt DateTime?
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  vehicle      Vehicle      @relation(fields: [vehicleId], references: [id])
+  fromUser     User?        @relation("HandoverFrom", fields: [fromUserId], references: [id])
+  toUser       User         @relation("HandoverTo", fields: [toUserId], references: [id])
+  receipt      Receipt?
+}
+
+model Receipt {
+  id            String        @id @default(cuid())
+  orgId         String
+  handoverId    String        @unique
+  receiverUserId String
+  odometer      Int
+  fuelLevel     String?
+  overallStatus OverallStatus
+  protocol      String
+  submittedAt   DateTime
+  createdAt     DateTime      @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  handover      Handover     @relation(fields: [handoverId], references: [id])
+  receiver      User         @relation("ReceiptReceiver", fields: [receiverUserId], references: [id])
+  accessoryAnswers AccessoryAnswer[]
+  quickCheckAnswers QuickCheckAnswer[]
+  damages       Damage[]
+  attachments   Attachment[]
+}
+
+model AccessoryTemplateItem {
+  id         String   @id @default(cuid())
+  orgId      String
+  name       String
+  isOptional Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  answers      AccessoryAnswer[]
+}
+
+model AccessoryAnswer {
+  id        String               @id @default(cuid())
+  receiptId String
+  itemId    String
+  value     AccessoryAnswerValue
+  notes     String?
+  createdAt DateTime @default(now())
+
+  receipt Receipt @relation(fields: [receiptId], references: [id])
+  item    AccessoryTemplateItem @relation(fields: [itemId], references: [id])
+}
+
+model QuickCheckItem {
+  id        String   @id @default(cuid())
+  orgId     String
+  name      String
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  answers      QuickCheckAnswer[]
+}
+
+model QuickCheckAnswer {
+  id        String         @id @default(cuid())
+  receiptId String
+  itemId    String
+  value     QuickCheckValue
+  notes     String?
+  createdAt DateTime @default(now())
+
+  receipt Receipt @relation(fields: [receiptId], references: [id])
+  item    QuickCheckItem @relation(fields: [itemId], references: [id])
+}
+
+model Damage {
+  id        String         @id @default(cuid())
+  receiptId String
+  type      DamageType
+  location  DamageLocation
+  severity  DamageSeverity
+  notes     String
+  createdAt DateTime @default(now())
+
+  receipt Receipt @relation(fields: [receiptId], references: [id])
+}
+
+model Attachment {
+  id          String              @id @default(cuid())
+  orgId       String
+  receiptId   String
+  ownerType   AttachmentOwnerType
+  ownerId     String?
+  basePhotoType BasePhotoType?
+  filePath    String
+  mimeType    String
+  createdAt   DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  receipt      Receipt      @relation(fields: [receiptId], references: [id])
+}
